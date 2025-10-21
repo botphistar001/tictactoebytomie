@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Room - Tic Tac Toe Pro</title>
+    <link rel="stylesheet" href="/styles/style.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="game-container">
+            <!-- Game Header -->
+            <header class="game-header">
+                <div class="header-left">
+                    <button class="btn btn-outline btn-sm" onclick="leaveGame()">
+                        <span class="btn-icon">←</span>
+                        Leave Game
+                    </button>
+                </div>
+                <div class="header-center">
+                    <h1 class="game-title">
+                        <span class="title-icon">⭕</span>
+                        Tic Tac Toe Pro
+                        <span class="title-icon">❌</span>
+                    </h1>
+                </div>
+                <div class="header-right">
+                    <div class="game-info">
+                        <span class="game-id" id="gameId">Game: Loading...</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="game-content">
+                <!-- Players Info -->
+                <div class="players-info">
+                    <div class="player-card player-x" id="playerX">
+                        <div class="player-symbol">❌</div>
+                        <div class="player-details">
+                            <div class="player-name">Player X</div>
+                            <div class="player-status" id="playerXStatus">Waiting...</div>
+                        </div>
+                    </div>
+
+                    <div class="vs-separator">
+                        <div class="vs-text">VS</div>
+                    </div>
+
+                    <div class="player-card player-o" id="playerO">
+                        <div class="player-symbol">⭕</div>
+                        <div class="player-details">
+                            <div class="player-name">Player O</div>
+                            <div class="player-status" id="playerOStatus">Waiting...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Game Board -->
+                <div class="game-board-section">
+                    <div class="current-turn" id="currentTurn">
+                        <span class="turn-symbol">❌</span>
+                        <span class="turn-text">X's Turn</span>
+                    </div>
+
+                    <div class="game-board" id="gameBoard">
+                        <!-- Board cells will be generated here -->
+                    </div>
+
+                    <div class="game-controls">
+                        <button class="btn btn-outline" onclick="resetGame()" id="resetBtn" disabled>
+                            <span class="btn-icon">🔄</span>
+                            New Game
+                        </button>
+                        <button class="btn btn-outline" onclick="leaveGame()">
+                            <span class="btn-icon">🚪</span>
+                            Leave Room
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Game Chat -->
+                <div class="game-chat">
+                    <div class="chat-header">
+                        <h3>Game Chat</h3>
+                    </div>
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="system-message">
+                            🎮 Game started! Good luck to both players!
+                        </div>
+                    </div>
+                    <div class="chat-input">
+                        <input type="text" id="chatInput" placeholder="Type a message..." maxlength="100">
+                        <button class="btn btn-primary" onclick="sendChatMessage()">
+                            <span class="btn-icon">📨</span>
+                            Send
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Winner Modal -->
+    <div class="modal" id="winnerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🎉 Game Finished!</h2>
+            </div>
+            <div class="modal-body">
+                <div class="winner-info" id="winnerInfo">
+                    <!-- Winner info will be inserted here -->
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" onclick="resetGame()">
+                        <span class="btn-icon">🔄</span>
+                        Play Again
+                    </button>
+                    <button class="btn btn-outline" onclick="leaveGame()">
+                        <span class="btn-icon">🏠</span>
+                        Back to Dashboard
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const pathParts = window.location.pathname.split('/');
+        const gameId = pathParts[2];
+        const userId = pathParts[3];
+        
+        let game = null;
+        let currentPlayerSymbol = null;
+
+        // Initialize game
+        async function initGame() {
+            await loadGameData();
+            setupSocketListeners();
+            renderGameBoard();
+            updateGameUI();
+        }
+
+        // Load game data
+        async function loadGameData() {
+            try {
+                const response = await fetch(`/api/game/${gameId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    game = data.game;
+                    document.getElementById('gameId').textContent = `Game: ${game.id.substring(0, 8)}...`;
+                    
+                    // Determine current player's symbol
+                    currentPlayerSymbol = game.player1.id === userId ? 'X' : 'O';
+                    
+                    // Update players info
+                    updatePlayersInfo();
+                    updateGameUI();
+                } else {
+                    showError('Game not found');
+                }
+            } catch (error) {
+                console.error('Error loading game data:', error);
+                showError('Failed to load game');
+            }
+        }
+
+        // Update players information
+        function updatePlayersInfo() {
+            // Player X (always player1)
+            document.getElementById('playerX').querySelector('.player-name').textContent = game.player1.username;
+            document.getElementById('playerXStatus').textContent = game.player1.id === userId ? 'You' : 'Opponent';
+
+            // Player O (always player2)
+            document.getElementById('playerO').querySelector('.player-name').textContent = game.player2.username;
+            document.getElementById('playerOStatus').textContent = game.player2.id === userId ? 'You' : 'Opponent';
+
+            // Highlight current player
+            document.getElementById('playerX').classList.toggle('active', game.currentPlayer === 'X');
+            document.getElementById('playerO').classList.toggle('active', game.currentPlayer === 'O');
+        }
+
+        // Render game board
+        function renderGameBoard() {
+            const board = document.getElementById('gameBoard');
+            board.innerHTML = '';
+
+            game.board.forEach((cell, index) => {
+                const cellElement = document.createElement('div');
+                cellElement.className = `board-cell ${cell ? 'occupied' : ''}`;
+                cellElement.textContent = cell === 'X' ? '❌' : cell === 'O' ? '⭕' : '';
+                cellElement.onclick = () => makeMove(index);
+                
+                // Highlight winning cells
+                if (game.winningLine && game.winningLine.includes(index)) {
+                    cellElement.classList.add('winning-cell');
+                }
+
+                board.appendChild(cellElement);
+            });
+        }
+
+        // Update game UI
+        function updateGameUI() {
+            // Update current turn
+            const currentTurn = document.getElementById('currentTurn');
+            currentTurn.querySelector('.turn-symbol').textContent = game.currentPlayer === 'X' ? '❌' : '⭕';
+            currentTurn.querySelector('.turn-text').textContent = `${game.currentPlayer}'s Turn`;
+
+            // Update reset button
+            document.getElementById('resetBtn').disabled = game.status === 'playing';
+
+            // Show winner modal if game finished
+            if (game.status === 'finished') {
+                showWinnerModal();
+            }
+        }
+
+        // Make a move
+        function makeMove(cellIndex) {
+            if (game.status !== 'playing') return;
+            
+            // Check if it's player's turn
+            const isPlayerTurn = (currentPlayerSymbol === 'X' && game.currentPlayer === 'X') ||
+                               (currentPlayerSymbol === 'O' && game.currentPlayer === 'O');
+            
+            if (!isPlayerTurn) {
+                showNotification("It's not your turn!", 'warning');
+                return;
+            }
+
+            // Check if cell is empty
+            if (game.board[cellIndex] !== null) {
+                showNotification('This cell is already occupied!', 'warning');
+                return;
+            }
+
+            // Send move to server
+            socket.emit('make_move', {
+                gameId: gameId,
+                cellIndex: cellIndex,
+                userId: userId
+            });
+        }
+
+        // Show winner modal
+        function showWinnerModal() {
+            const modal = document.getElementById('winnerModal');
+            const winnerInfo = document.getElementById('winnerInfo');
+
+            let winnerText = '';
+            if (game.winner === 'draw') {
+                winnerText = `
+                    <div class="winner-result draw">
+                        <div class="winner-icon">🤝</div>
+                        <h3>It's a Draw!</h3>
+                        <p>Both players played exceptionally well!</p>
+                    </div>
+                `;
+            } else {
+                const isWinner = (game.winner === 'X' && currentPlayerSymbol === 'X') ||
+                               (game.winner === 'O' && currentPlayerSymbol === 'O');
+                
+                const winnerName = game.winner === 'X' ? game.player1.username : game.player2.username;
+                
+                winnerText = `
+                    <div class="winner-result ${isWinner ? 'win' : 'lose'}">
+                        <div class="winner-icon">${isWinner ? '🏆' : '🎖️'}</div>
+                        <h3>${isWinner ? 'You Win!' : 'You Lost!'}</h3>
+                        <p>${isWinner ? 'Congratulations!' : 'Better luck next time!'}</p>
+                        <div class="winner-details">
+                            ${winnerName} is the winner!
+                        </div>
+                    </div>
+                `;
+            }
+
+            winnerInfo.innerHTML = winnerText;
+            modal.style.display = 'flex';
+        }
+
+        // Reset game
+        function resetGame() {
+            // Close modal
+            document.getElementById('winnerModal').style.display = 'none';
+            
+            // For now, redirect to dashboard - in future could implement rematch
+            window.location.href = `/dashboard/${userId}`;
+        }
+
+        // Leave game
+        function leaveGame() {
+            if (confirm('Are you sure you want to leave the game?')) {
+                window.location.href = `/dashboard/${userId}`;
+            }
+        }
+
+        // Send chat message
+        function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (message) {
+                // For now, just show locally - could implement real chat later
+                addChatMessage(userId, message, 'player');
+                input.value = '';
+            }
+        }
+
+        // Add chat message
+        function addChatMessage(senderId, message, type = 'player') {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageElement = document.createElement('div');
+            
+            messageElement.className = `chat-message ${type}-message`;
+            messageElement.innerHTML = `
+                <div class="message-sender">${type === 'player' ? 'You' : 'Opponent'}</div>
+                <div class="message-content">${message}</div>
+                <div class="message-time">${new Date().toLocaleTimeString()}</div>
+            `;
+            
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Socket event listeners
+        function setupSocketListeners() {
+            // Join game room
+            socket.emit('join_game', gameId);
+
+            // Listen for moves
+            socket.on('move_made', (data) => {
+                game = data.game;
+                renderGameBoard();
+                updateGameUI();
+                addChatMessage(data.player, `made a move at position ${data.cellIndex}`, 'system');
+            });
+
+            // Listen for game finished
+            socket.on('game_finished', (data) => {
+                game = data.game;
+                renderGameBoard();
+                updateGameUI();
+                
+                let resultMessage = '';
+                if (data.winner === 'draw') {
+                    resultMessage = 'Game ended in a draw!';
+                } else {
+                    const winnerName = data.winner === 'X' ? game.player1.username : game.player2.username;
+                    resultMessage = `${winnerName} wins the game!`;
+                }
+                
+                addChatMessage('system', resultMessage, 'system');
+            });
+
+            // Listen for move errors
+            socket.on('move_error', (data) => {
+                showNotification(data.error, 'error');
+            });
+        }
+
+        // Utility functions
+        function showNotification(message, type) {
+            // Simple notification implementation
+            alert(`${type.toUpperCase()}: ${message}`);
+        }
+
+        function showError(message) {
+            showNotification(message, 'error');
+            setTimeout(() => {
+                window.location.href = `/dashboard/${userId}`;
+            }, 3000);
+        }
+
+        // Initialize game when page loads
+        document.addEventListener('DOMContentLoaded', initGame);
+
+        // Handle Enter key in chat
+        document.getElementById('chatInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+    </script>
+</body>
+</html>
