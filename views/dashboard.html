@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic Tac Toe Pro - Ultimate Multiplayer Experience</title>
+    <link rel="stylesheet" href="/styles/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="hero-section">
+            <div class="particles" id="particles-js"></div>
+            
+            <div class="logo-container">
+                <h1 class="game-title">
+                    <span class="title-icon">⭕</span>
+                    Tic Tac Toe Pro
+                    <span class="title-icon">❌</span>
+                </h1>
+                <p class="game-subtitle">The Ultimate Multiplayer Battle Arena</p>
+                <div class="version-badge">v1.0</div>
+            </div>
+
+            <div class="hero-stats">
+                <div class="stat-card">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-number" id="totalUsers">0</div>
+                    <div class="stat-label">Total Players</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🎮</div>
+                    <div class="stat-number" id="activeGames">0</div>
+                    <div class="stat-label">Active Games</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⚡</div>
+                    <div class="stat-number" id="onlineUsers">0</div>
+                    <div class="stat-label">Online Now</div>
+                </div>
+            </div>
+
+            <div class="cta-section">
+                <h2>Ready to Battle?</h2>
+                <p>Challenge players worldwide in the most exciting Tic Tac Toe experience!</p>
+                
+                <div class="cta-buttons">
+                    <button class="btn btn-primary" onclick="startGame()">
+                        <span class="btn-icon">🚀</span>
+                        Quick Start
+                    </button>
+                    <button class="btn btn-secondary" onclick="showInstructions()">
+                        <span class="btn-icon">📖</span>
+                        How to Play
+                    </button>
+                </div>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🌐</div>
+                    <h3>Real-time Multiplayer</h3>
+                    <p>Play with friends or random opponents from around the world</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🏆</div>
+                    <h3>Leaderboards</h3>
+                    <p>Track your wins, streaks, and climb the global rankings</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Instant Matchmaking</h3>
+                    <p>Find opponents quickly with our smart matching system</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎨</div>
+                    <h3>Beautiful Design</h3>
+                    <p>Enjoy a stunning, modern interface with smooth animations</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Generate random user ID for new players
+        function generateUserId() {
+            return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function startGame() {
+            const userId = generateUserId();
+            window.location.href = `/register/${userId}`;
+        }
+
+        function showInstructions() {
+            alert(`🎮 How to Play Tic Tac Toe Pro:\n\n1. Create your player profile\n2. Find opponents in the lobby\n3. Send game invites or accept incoming ones\n4. Make moves by clicking the grid\n5. Get 3 in a row to win!\n6. Track your stats and climb the leaderboard\n\n🏆 Good luck and have fun!`);
+        }
+
+        // Load real-time statistics
+        async function loadStatistics() {
+            try {
+                const response = await fetch('/api/statistics');
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('totalUsers').textContent = data.statistics.totalUsers;
+                    document.getElementById('activeGames').textContent = data.statistics.activeGames;
+                    document.getElementById('onlineUsers').textContent = data.statistics.onlineUsers;
+                }
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+            }
+        }
+
+        // Update statistics every 10 seconds
+        loadStatistics();
+        setInterval(loadStatistics, 10000);
+
+        // Simple particle effect
+        function createParticles() {
+            const container = document.getElementById('particles-js');
+            if (!container) return;
+            
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + 'vw';
+                particle.style.animationDelay = Math.random() * 20 + 's';
+                particle.style.animationDuration = (Math.random() * 10 + 10) + 's';
+                container.appendChild(particle);
+            }
+        }
+
+        createParticles();
+    </script>
+</body>
+</html>
