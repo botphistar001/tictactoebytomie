@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Your Player Profile - Tic Tac Toe Pro</title>
+    <link rel="stylesheet" href="/styles/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="registration-container">
+            <div class="registration-card">
+                <div class="logo-container">
+                    <h1 class="game-title">
+                        <span class="title-icon">⭕</span>
+                        Create Profile
+                        <span class="title-icon">❌</span>
+                    </h1>
+                    <p class="subtitle">Join the ultimate Tic Tac Toe community</p>
+                </div>
+
+                <div id="alert" class="alert"></div>
+
+                <form id="registrationForm" class="registration-form">
+                    <div class="form-group">
+                        <label for="firstName">First Name</label>
+                        <input type="text" id="firstName" class="form-control" required placeholder="Enter your first name">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="lastName">Last Name</label>
+                        <input type="text" id="lastName" class="form-control" required placeholder="Enter your last name">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="username">Game Username</label>
+                        <input type="text" id="username" class="form-control" required placeholder="Choose your game username">
+                        <small class="form-text">This will be visible to other players</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <input type="email" id="email" class="form-control" required placeholder="Enter your email address">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <span class="btn-icon">🎮</span>
+                        Create Player Profile
+                    </button>
+                </form>
+
+                <div class="registration-footer">
+                    <p>By creating an account, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('registrationForm');
+        const alert = document.getElementById('alert');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                firstName: document.getElementById('firstName').value.trim(),
+                lastName: document.getElementById('lastName').value.trim(),
+                username: document.getElementById('username').value.trim(),
+                email: document.getElementById('email').value.trim()
+            };
+
+            // Validation
+            if (!formData.firstName || !formData.lastName || !formData.username || !formData.email) {
+                showAlert('Please fill in all fields', 'error');
+                return;
+            }
+
+            if (formData.username.length < 3) {
+                showAlert('Username must be at least 3 characters long', 'error');
+                return;
+            }
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(formData.email)) {
+                showAlert('Please enter a valid email address', 'error');
+                return;
+            }
+
+            try {
+                const userId = window.location.pathname.split('/')[2];
+                const response = await fetch(`/register/${userId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('🎉 Profile created successfully! Redirecting...', 'success');
+                    setTimeout(() => {
+                        window.location.href = data.redirectUrl;
+                    }, 2000);
+                } else {
+                    showAlert(data.error || 'Failed to create profile', 'error');
+                }
+            } catch (error) {
+                showAlert('Network error. Please try again.', 'error');
+            }
+        });
+
+        function showAlert(message, type) {
+            alert.textContent = message;
+            alert.className = `alert alert-${type}`;
+            alert.style.display = 'block';
+            
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
