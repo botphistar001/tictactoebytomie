@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Dashboard - Tic Tac Toe Pro</title>
+    <link rel="stylesheet" href="/styles/style.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="dashboard-container">
+            <!-- Header -->
+            <header class="dashboard-header">
+                <div class="header-left">
+                    <h1 class="game-title">
+                        <span class="title-icon">⭕</span>
+                        Game Dashboard
+                        <span class="title-icon">❌</span>
+                    </h1>
+                </div>
+                <div class="header-right">
+                    <div class="user-info" id="userInfo">
+                        <div class="user-avatar">
+                            <span class="avatar-icon">👤</span>
+                        </div>
+                        <div class="user-details">
+                            <span class="username" id="username">Loading...</span>
+                            <span class="user-status online">● Online</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="dashboard-content">
+                <!-- Player Stats -->
+                <div class="stats-section">
+                    <h2 class="section-title">📊 Your Statistics</h2>
+                    <div class="stats-grid" id="playerStats">
+                        <div class="stat-card">
+                            <div class="stat-value" id="gamesPlayed">0</div>
+                            <div class="stat-label">Games Played</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="gamesWon">0</div>
+                            <div class="stat-label">Games Won</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="winRate">0%</div>
+                            <div class="stat-label">Win Rate</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="winStreak">0</div>
+                            <div class="stat-label">Current Streak</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Online Players -->
+                <div class="players-section">
+                    <div class="section-header">
+                        <h2 class="section-title">👥 Online Players</h2>
+                        <button class="btn btn-sm btn-outline" onclick="refreshPlayers()">
+                            <span class="btn-icon">🔄</span>
+                            Refresh
+                        </button>
+                    </div>
+                    <div class="players-grid" id="onlinePlayers">
+                        <!-- Players will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Game Invites -->
+                <div class="invites-section" id="invitesSection" style="display: none;">
+                    <h2 class="section-title">📨 Pending Invites</h2>
+                    <div class="invites-list" id="pendingInvites">
+                        <!-- Invites will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="actions-section">
+                    <h2 class="section-title">⚡ Quick Actions</h2>
+                    <div class="actions-grid">
+                        <button class="action-card" onclick="findRandomOpponent()">
+                            <div class="action-icon">🎯</div>
+                            <div class="action-title">Find Random Opponent</div>
+                            <div class="action-description">Get matched with a random player</div>
+                        </button>
+                        <button class="action-card" onclick="showFriendsList()">
+                            <div class="action-icon">👥</div>
+                            <div class="action-title">Play with Friends</div>
+                            <div class="action-description">Invite your friends to play</div>
+                        </button>
+                        <button class="action-card" onclick="viewLeaderboard()">
+                            <div class="action-icon">🏆</div>
+                            <div class="action-title">View Leaderboard</div>
+                            <div class="action-description">See top players worldwide</div>
+                        </button>
+                        <button class="action-card" onclick="showGameHistory()">
+                            <div class="action-icon">📈</div>
+                            <div class="action-title">Game History</div>
+                            <div class="action-description">Review your past games</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const userId = window.location.pathname.split('/')[2];
+        let onlinePlayers = [];
+
+        // Initialize dashboard
+        async function initDashboard() {
+            await loadUserData();
+            await loadOnlinePlayers();
+            await loadPendingInvites();
+            setupSocketListeners();
+        }
+
+        // Load user data
+        async function loadUserData() {
+            try {
+                const response = await fetch(`/api/user/${userId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const user = data.user;
+                    document.getElementById('username').textContent = user.username;
+                    
+                    // Update stats
+                    document.getElementById('gamesPlayed').textContent = user.stats.gamesPlayed;
+                    document.getElementById('gamesWon').textContent = user.stats.gamesWon;
+                    
+                    const winRate = user.stats.gamesPlayed > 0 
+                        ? Math.round((user.stats.gamesWon / user.stats.gamesPlayed) * 100)
+                        : 0;
+                    document.getElementById('winRate').textContent = winRate + '%';
+                    document.getElementById('winStreak').textContent = user.stats.winStreak;
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+            }
+        }
+
+        // Load online players
+        async function loadOnlinePlayers() {
+            try {
+                const response = await fetch('/api/online-users');
+                const data = await response.json();
+                
+                if (data.success) {
+                    onlinePlayers = data.users.filter(user => user.id !== userId);
+                    displayOnlinePlayers(onlinePlayers);
+                }
+            } catch (error) {
+                console.error('Error loading online players:', error);
+            }
+        }
+
+        // Display online players
+        function displayOnlinePlayers(players) {
+            const container = document.getElementById('onlinePlayers');
+            
+            if (players.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">👥</div>
+                        <p>No other players online right now</p>
+                        <small>Check back later or invite friends to join!</small>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = players.map(player => `
+                <div class="player-card">
+                    <div class="player-avatar">
+                        <span class="avatar-icon">👤</span>
+                    </div>
+                    <div class="player-info">
+                        <div class="player-username">${player.username}</div>
+                        <div class="player-stats">
+                            ${player.stats.gamesWon} wins • ${player.stats.winRate || 0}% win rate
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="sendGameInvite('${player.id}')">
+                        <span class="btn-icon">🎯</span>
+                        Challenge
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // Load pending invites
+        async function loadPendingInvites() {
+            try {
+                const response = await fetch(`/api/pending-invites/${userId}`);
+                const data = await response.json();
+                
+                if (data.success && data.invites.length > 0) {
+                    document.getElementById('invitesSection').style.display = 'block';
+                    displayPendingInvites(data.invites);
+                }
+            } catch (error) {
+                console.error('Error loading pending invites:', error);
+            }
+        }
+
+        // Display pending invites
+        function displayPendingInvites(invites) {
+            const container = document.getElementById('pendingInvites');
+            
+            container.innerHTML = invites.map(invite => `
+                <div class="invite-card">
+                    <div class="invite-info">
+                        <div class="invite-from">${invite.fromUser.username}</div>
+                        <div class="invite-time">${new Date(invite.createdAt).toLocaleTimeString()}</div>
+                    </div>
+                    <div class="invite-actions">
+                        <button class="btn btn-success btn-sm" onclick="acceptInvite('${invite.id}')">
+                            <span class="btn-icon">✅</span>
+                            Accept
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="declineInvite('${invite.id}')">
+                            <span class="btn-icon">❌</span>
+                            Decline
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Socket event listeners
+        function setupSocketListeners() {
+            // Notify server that user is online
+            socket.emit('user_online', userId);
+
+            // Listen for online users updates
+            socket.on('online_users', (users) => {
+                onlinePlayers = users.filter(user => user.id !== userId);
+                displayOnlinePlayers(onlinePlayers);
+            });
+
+            // Listen for user status changes
+            socket.on('user_status_changed', (data) => {
+                loadOnlinePlayers(); // Refresh the list
+            });
+
+            // Listen for game invites
+            socket.on('game_invite', (data) => {
+                showInviteNotification(data);
+                loadPendingInvites();
+            });
+
+            // Listen for accepted invites
+            socket.on('invite_accepted', (data) => {
+                window.location.href = `/game/${data.gameId}/${userId}`;
+            });
+
+            // Listen for game start
+            socket.on('game_started', (data) => {
+                window.location.href = `/game/${data.gameId}/${userId}`;
+            });
+        }
+
+        // Send game invite
+        async function sendGameInvite(toUserId) {
+            try {
+                const response = await fetch('/api/send-invite', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        fromUserId: userId,
+                        toUserId: toUserId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification('🎯 Game invite sent!', 'success');
+                } else {
+                    showNotification('❌ Failed to send invite', 'error');
+                }
+            } catch (error) {
+                console.error('Error sending invite:', error);
+                showNotification('❌ Network error', 'error');
+            }
+        }
+
+        // Accept game invite
+        async function acceptInvite(inviteId) {
+            try {
+                const response = await fetch('/api/respond-invite', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        inviteId: inviteId,
+                        response: 'accepted',
+                        userId: userId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification('✅ Invite accepted! Starting game...', 'success');
+                    // Redirect will happen via socket event
+                }
+            } catch (error) {
+                console.error('Error accepting invite:', error);
+                showNotification('❌ Error accepting invite', 'error');
+            }
+        }
+
+        // Decline game invite
+        async function declineInvite(inviteId) {
+            try {
+                const response = await fetch('/api/respond-invite', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        inviteId: inviteId,
+                        response: 'declined',
+                        userId: userId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification('❌ Invite declined', 'info');
+                    loadPendingInvites();
+                }
+            } catch (error) {
+                console.error('Error declining invite:', error);
+            }
+        }
+
+        // Show invite notification
+        function showInviteNotification(inviteData) {
+            if (Notification.permission === 'granted') {
+                new Notification('🎮 Game Invite!', {
+                    body: `${inviteData.fromUser.username} invited you to play Tic Tac Toe!`,
+                    icon: '/favicon.ico'
+                });
+            }
+            
+            showNotification(`🎯 ${inviteData.fromUser.username} invited you to play!`, 'info');
+        }
+
+        // Utility functions
+        function refreshPlayers() {
+            loadOnlinePlayers();
+            showNotification('🔄 Player list refreshed', 'info');
+        }
+
+        function findRandomOpponent() {
+            if (onlinePlayers.length > 0) {
+                const randomPlayer = onlinePlayers[Math.floor(Math.random() * onlinePlayers.length)];
+                sendGameInvite(randomPlayer.id);
+            } else {
+                showNotification('👥 No players available for random match', 'warning');
+            }
+        }
+
+        function showFriendsList() {
+            showNotification('👥 Friends feature coming soon!', 'info');
+        }
+
+        function viewLeaderboard() {
+            showNotification('🏆 Leaderboard coming soon!', 'info');
+        }
+
+        function showGameHistory() {
+            showNotification('📈 Game history coming soon!', 'info');
+        }
+
+        function showNotification(message, type) {
+            // Simple notification implementation
+            alert(`${type.toUpperCase()}: ${message}`);
+        }
+
+        // Request notification permission
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', initDashboard);
+    </script>
+</body>
+</html>
